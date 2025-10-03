@@ -1,6 +1,5 @@
 # HISAT-genotype
 
-This is the official HISAT-genotype Repository.
 
 Please see the official website for HISATgenotype:
 https://daehwankimlab.github.io/hisat-genotype/
