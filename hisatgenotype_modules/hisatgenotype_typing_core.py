@@ -27,6 +27,7 @@ import random
 import math
 import multiprocessing
 import json
+import threading
 from datetime import datetime, date, time
 from copy import deepcopy
 import hisatgenotype_typing_common as typing_common
@@ -352,7 +353,12 @@ def typing(simulation,
                 alignment_fname = "%s.bam" % core_fid
 
             if genotype_genome != "":
-                gegenome = genotype_genome
+                # If genotype_genome doesn't contain a path, use the same directory as base
+                if '/' not in genotype_genome:
+                    base_dir = os.path.dirname(full_path_base_fname)
+                    gegenome = os.path.join(base_dir, genotype_genome)
+                else:
+                    gegenome = genotype_genome
             else:
                 gegenome = (full_path_base_fname + "." + index_type)
             typing_common.align_reads(aligner,
@@ -458,7 +464,16 @@ def typing(simulation,
                 bamview_proc = subprocess.Popen(alignview_cmd,
                                                 universal_newlines = True,
                                                 stdout = subprocess.PIPE,
-                                                stderr = open("/dev/null", 'w'))
+                                                stderr = subprocess.PIPE)
+
+                # Start thread to consume stderr from bamview_proc
+                def consume_stderr_bam(proc):
+                    for line in proc.stderr:
+                        pass
+
+                stderr_thread_bam = threading.Thread(target=consume_stderr_bam, args=(bamview_proc,))
+                stderr_thread_bam.daemon = True
+                stderr_thread_bam.start()
 
                 sort_read_cmd = ["sort", "-k", "1,1", "-s"] # -s for stable sorting
                 alignview_proc = subprocess.Popen(sort_read_cmd,
@@ -466,11 +481,26 @@ def typing(simulation,
                                                   stdin  = bamview_proc.stdout,
                                                   stdout = subprocess.PIPE,
                                                   stderr = open("/dev/null", 'w'))
+
+                # Close bamview stdout in parent so sort gets EOF
+                bamview_proc.stdout.close()
             else:
                 alignview_proc = subprocess.Popen(alignview_cmd,
                                                   universal_newlines = True,
                                                   stdout = subprocess.PIPE,
-                                                  stderr = open("/dev/null", 'w'))
+                                                  stderr = subprocess.PIPE)
+
+                # Start thread to consume stderr from alignview_proc
+                def consume_stderr_align(proc):
+                    for line in proc.stderr:
+                        pass
+
+                stderr_thread_align = threading.Thread(target=consume_stderr_align, args=(alignview_proc,))
+                stderr_thread_align.daemon = True
+                stderr_thread_align.start()
+
+                bamview_proc = None
+                stderr_thread_bam = None
 
             # List of nodes that represent alleles
             allele_vars = {}
@@ -1586,6 +1616,15 @@ def typing(simulation,
                     read_nodes    = []
                     read_var_list = []
 
+                # Wait for subprocess to complete
+                if bamview_proc:
+                    bamview_proc.wait()
+                    if stderr_thread_bam:
+                        stderr_thread_bam.join(timeout=5)
+                alignview_proc.wait()
+                if 'stderr_thread_align' in locals():
+                    stderr_thread_align.join(timeout=5)
+
                 if num_reads <= 0:
                     continue
 
@@ -1646,6 +1685,15 @@ def typing(simulation,
 
                 if alleles:
                     add_alleles(alleles)
+
+                # Wait for subprocess to complete (linear index)
+                if bamview_proc:
+                    bamview_proc.wait()
+                    if stderr_thread_bam:
+                        stderr_thread_bam.join(timeout=5)
+                alignview_proc.wait()
+                if 'stderr_thread_align' in locals():
+                    stderr_thread_align.join(timeout=5)
 
             Gene_counts = [[allele, count] for allele, count in Gene_counts.items()]
             Gene_counts = sorted(Gene_counts, key = lambda x: x[1], reverse = True)

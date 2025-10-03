@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # --------------------------------------------------------------------------- #
 # Copyright 2017, Daehwan Kim <infphilo@gmail.com>                            #
 #                                                                             #
@@ -455,24 +455,40 @@ def typing_process(args):
     fq_fname_base = {}
     if args.debug == "":
         if args.read_fname_U != "":
-            read_fnames     = ['%s%s' % (args.read_dir, args.read_fname_U)]
+            # Don't prepend read_dir if path is already absolute
+            if args.read_fname_U.startswith('/'):
+                read_fnames = [args.read_fname_U]
+            else:
+                read_fnames = ['%s%s' % (args.read_dir, args.read_fname_U)]
             single_run      = True
             paired          = False
-            args.discordant = True        
+            args.discordant = True
         elif args.read_fname_1 != "" or args.read_fname_2 != "":
             if args.read_fname_1 == "" or args.read_fname_2 == "":
-                print("Error: please specify both -1 and -2.", 
+                print("Error: please specify both -1 and -2.",
                       file=sys.stderr)
                 sys.exit(1)
-            read_fnames = ['%s%s' % (args.read_dir, args.read_fname_1), 
-                           '%s%s' % (args.read_dir, args.read_fname_2)]
+            # Don't prepend read_dir if paths are already absolute
+            if args.read_fname_1.startswith('/'):
+                fname_1 = args.read_fname_1
+            else:
+                fname_1 = '%s%s' % (args.read_dir, args.read_fname_1)
+            if args.read_fname_2.startswith('/'):
+                fname_2 = args.read_fname_2
+            else:
+                fname_2 = '%s%s' % (args.read_dir, args.read_fname_2)
+            read_fnames = [fname_1, fname_2]
             single_run = True
             if not paired:
                 print("Warning! Using --single-end with -1 and -2 options. "\
                          "Ignoring!")
             paired     = True
         elif args.alignment_fname != "":
-            alignment_fnames = ['%s%s' % (args.read_dir, args.alignment_fname)]
+            # Don't prepend read_dir if path is already absolute
+            if args.alignment_fname.startswith('/'):
+                alignment_fnames = [args.alignment_fname]
+            else:
+                alignment_fnames = ['%s%s' % (args.read_dir, args.alignment_fname)]
             is_bam = True
         else:
             if args.read_dir == '' or not os.path.exists(args.read_dir):
@@ -486,7 +502,7 @@ def typing_process(args):
         if not args.already_extract:
             # Geno_genome is only needed for extract reads
             if args.genotype_genome != '':
-                geno_genome = args.genotype_genome 
+                geno_genome = args.genotype_genome
             else:
                 geno_genome = 'genotype_genome'
 

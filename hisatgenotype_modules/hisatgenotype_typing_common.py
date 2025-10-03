@@ -27,6 +27,7 @@ import math
 import random
 import errno
 import json
+import threading
 from copy import deepcopy
 from datetime import datetime
 import hisatgenotype_typing_process as typing_process
@@ -1033,15 +1034,91 @@ def align_reads(aligner,
     align_proc = subprocess.Popen(aligner_cmd,
                                   universal_newlines = True,
                                   stdout = subprocess.PIPE,
-                                  stderr = open("/dev/null", 'w'))
-   
+                                  stderr = subprocess.PIPE)
+
+    # Start a thread to consume stderr to prevent deadlock
+    stderr_output = []
+    def consume_stderr(proc, output_list):
+        for line in proc.stderr:
+            output_list.append(line)
+
+    stderr_thread = threading.Thread(target=consume_stderr, args=(align_proc, stderr_output))
+    stderr_thread.daemon = True
+    stderr_thread.start()
+
     sambam_cmd = ["samtools", "view", "-bS", "-"]
     sambam_proc = subprocess.Popen(sambam_cmd,
                                    universal_newlines = True,
                                    stdin  = align_proc.stdout,
                                    stdout = open(out_fname + ".unsorted", 'w'),
                                    stderr = open("/dev/null", 'w'))
-    sambam_proc.communicate()
+
+    # Close align_proc stdout in parent so sambam_proc gets EOF when align_proc finishes
+    align_proc.stdout.close()
+
+    # Wait for both processes - sambam depends on align_proc output
+    # We need to wait for both in parallel to avoid deadlock
+    import time
+    timeout_seconds = 300  # 5 minutes max
+    start_time = time.time()
+
+    while True:
+        # Check for timeout
+        if time.time() - start_time > timeout_seconds:
+            print("Warning: Timeout waiting for alignment processes, killing...", file=sys.stderr)
+            try:
+                align_proc.kill()
+            except:
+                pass
+            try:
+                sambam_proc.kill()
+            except:
+                pass
+            break
+
+        sambam_poll = sambam_proc.poll()
+        align_poll = align_proc.poll()
+
+        # If align_proc died but sambam is still running, kill sambam
+        if align_poll is not None and sambam_poll is None:
+            print("Warning: aligner died, killing samtools...", file=sys.stderr)
+            try:
+                sambam_proc.kill()
+                sambam_proc.wait()
+            except:
+                pass
+            break
+
+        # If both are done, break
+        if sambam_poll is not None and align_poll is not None:
+            break
+
+        # If just sambam is done, wait a bit more for align
+        if sambam_poll is not None:
+            time.sleep(0.5)
+            if align_proc.poll() is not None:
+                break
+
+        time.sleep(0.1)
+
+    # Make sure both are reaped
+    try:
+        align_proc.wait(timeout=5)
+    except:
+        align_proc.kill()
+    try:
+        sambam_proc.wait(timeout=5)
+    except:
+        sambam_proc.kill()
+    stderr_thread.join(timeout=5)
+
+    # Check for errors
+    if align_proc.returncode != 0:
+        print("Warning: aligner exited with code %d" % align_proc.returncode, file=sys.stderr)
+        if stderr_output:
+            print("Aligner stderr output:", file=sys.stderr)
+            for line in stderr_output[:20]:  # Show first 20 lines
+                print("  ", line.rstrip(), file=sys.stderr)
     
     bamsort_cmd = ["samtools", "sort", out_fname + ".unsorted", "-o", out_fname]
     bamsort_proc = subprocess.Popen(bamsort_cmd,

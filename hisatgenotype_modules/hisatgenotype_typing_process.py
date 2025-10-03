@@ -29,6 +29,7 @@ import random
 import glob
 import multiprocessing
 import json
+import threading
 import hisatgenotype_typing_common as typing_common
 import hisatgenotype_validation_check as validation_check
 
@@ -1486,7 +1487,16 @@ def extract_reads(base_fname,    # Base file name of genome to use
             align_proc = subprocess.Popen(aligner_cmd,
                                           universal_newlines = True,
                                           stdout = subprocess.PIPE,
-                                          stderr = open("/dev/null", 'w'))
+                                          stderr = subprocess.PIPE)
+
+            # Start a thread to consume stderr to prevent deadlock
+            def consume_stderr(proc):
+                for line in proc.stderr:
+                    pass  # Just consume it to prevent pipe from filling
+
+            stderr_thread = threading.Thread(target=consume_stderr, args=(align_proc,))
+            stderr_thread.daemon = True
+            stderr_thread.start()
 
             gzip_dic = {}
             for database in database_list:
@@ -1750,16 +1760,29 @@ def extract_reads(base_fname,    # Base file name of genome to use
                                prev_read_name,
                                fastq)
 
+            # Close stdin and wait for gzip processes to complete
             for gzip1_proc, gzip2_proc in gzip_dic.values():
                 gzip1_proc.stdin.close()
+                gzip1_proc.wait()
                 if paired:
                     gzip2_proc.stdin.close()
+                    gzip2_proc.wait()
 
             for gzip_list in whole_gzip_dic.values():
                 for gzip1_proc, gzip2_proc in gzip_list:
                     gzip1_proc.stdin.close()
+                    gzip1_proc.wait()
                     if paired:
-                        gzip2_proc.stdin.close()         
+                        gzip2_proc.stdin.close()
+                        gzip2_proc.wait()
+
+            # Wait for align_proc to complete
+            align_proc.wait()
+            stderr_thread.join(timeout=5)  # Wait up to 5 seconds for stderr thread
+
+            if align_proc.returncode != 0 and verbose:
+                print("\t\tWarning: aligner exited with code %d" % align_proc.returncode,
+                      file=sys.stderr)
 
         if threads <= 1:
             work(fq_fname_base, 
