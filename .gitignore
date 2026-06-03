@@ -29,4 +29,9 @@ hisat2_test/2*
 hisat2_test/snp142*
 hisat2_test/testset*
 
-indicies/
+indicies/bin/
+obj/
+__pycache__/
+*.pyc
+hlasat/
+*.bak.preofnlog

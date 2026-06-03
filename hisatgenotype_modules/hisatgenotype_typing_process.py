@@ -679,7 +679,7 @@ def extract_vars(base_fname,
                 ref_partial_exons.append([ref_partial_seq_map[exon_len], 
                                           ref_partial_seq_map[next_exon_len]])
                 exon_len += (right - left + 1)
-                # Make sure two MSF files (e.g. A_gen.msf and A_nuc.msf) 
+                # Make sure two MSF files (e.g. A_gen.msf and A_nuc.msf)
                 # share the same MSF lengths in the exonic sequences
                 ref_exon_len         = ref_exons[-1][1] \
                                         - ref_exons[-1][0] \
@@ -1032,7 +1032,7 @@ def extract_vars(base_fname,
                     exon_str += ','
                 primary = gene_exon_counts[gene][exon_i] \
                             == max(gene_exon_counts[gene].values())
-                exon_str += ("%d-%d%s" 
+                exon_str += ("%d-%d%s"
                                 % (exon_left, exon_right, 'p' if primary else ''))
 
             # Sanity check for exonic sequence
@@ -1417,9 +1417,9 @@ def extract_reads(base_fname,    # Base file name of genome to use
 
         if paired:
             if len(read_fname) > 0:
-                fq_fname_base = fq_fname.split('/')[-1]
+                fq_fname_base = fq_fname.split('/')[-1].split('.')[0]
             else:
-                fq_fname_base = paired_fq_basen[file_i].split('/')[-1]
+                fq_fname_base = paired_fq_basen[file_i].split('/')[-1].split('.')[0]
         else:
             fq_fname_base = fq_fname.split('/')[-1].split('.')[0]
             

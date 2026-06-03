@@ -684,7 +684,7 @@ def typing_process(args):
         pool.close()
 
         runtime = str(date.today())
-        ofnlog = open("%s_hisat-genotype.log" % (runtime), 'w')        
+        ofnlog = open("%s/%s_hisat-genotype.log" % (args.out_dir, runtime), 'w')
         for entry, x in log.items():
             ofnlog.write('> Base and Files:' + entry + '\n')
             try:

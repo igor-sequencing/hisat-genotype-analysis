@@ -350,7 +350,7 @@ def typing(simulation,
             if simulation:
                 alignment_fname = "%s_output.bam" % base_fname
             else:
-                alignment_fname = "%s.bam" % core_fid
+                alignment_fname = "%s/%s.bam" % (out_dir, core_fid)
 
             if genotype_genome != "":
                 # If genotype_genome doesn't contain a path, use the same directory as base

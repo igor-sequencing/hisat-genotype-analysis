@@ -83,9 +83,9 @@ if __name__ == '__main__':
         else:
             base_dname = ""        
 
-        pool.apply_async(extract_vars, 
+        pool.apply_async(extract_vars,
                          args=(base,
-                               base_dname,
+                               args.ix_dir,
                                locus_list,
                                args.inter_gap,
                                args.intra_gap,

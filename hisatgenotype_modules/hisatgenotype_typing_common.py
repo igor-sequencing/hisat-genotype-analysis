@@ -1059,7 +1059,7 @@ def align_reads(aligner,
     # Wait for both processes - sambam depends on align_proc output
     # We need to wait for both in parallel to avoid deadlock
     import time
-    timeout_seconds = 300  # 5 minutes max
+    timeout_seconds = 18000  # 5 hours max
     start_time = time.time()
 
     while True:
@@ -1079,9 +1079,13 @@ def align_reads(aligner,
         sambam_poll = sambam_proc.poll()
         align_poll = align_proc.poll()
 
-        # If align_proc died but sambam is still running, kill sambam
-        if align_poll is not None and sambam_poll is None:
-            print("Warning: aligner died, killing samtools...", file=sys.stderr)
+        # If both are done, break
+        if sambam_poll is not None and align_poll is not None:
+            break
+
+        # If aligner exited non-zero, output is likely truncated — kill samtools
+        if align_poll is not None and align_proc.returncode != 0 and sambam_poll is None:
+            print("Warning: aligner died (exit code %d), killing samtools..." % align_proc.returncode, file=sys.stderr)
             try:
                 sambam_proc.kill()
                 sambam_proc.wait()
@@ -1089,9 +1093,10 @@ def align_reads(aligner,
                 pass
             break
 
-        # If both are done, break
-        if sambam_poll is not None and align_poll is not None:
-            break
+        # If aligner exited cleanly, let samtools drain the pipe to EOF
+        if align_poll is not None and align_proc.returncode == 0:
+            time.sleep(0.1)
+            continue
 
         # If just sambam is done, wait a bit more for align
         if sambam_poll is not None:
